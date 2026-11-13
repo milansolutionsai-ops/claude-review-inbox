@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Review</title>
+  <link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/ui/manifest.webmanifest">
+  <meta name="theme-color" content="#0f1113">
+  <link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/">Video Review</a>
+    <div id="pointer" class="pointer" hidden>
+      <span id="pointer-text"></span>
+      <button id="pointer-copy" class="ghost">Copy</button>
+    </div>
+  </header>
+  <main id="app"></main>
+  <footer id="keys" class="keys" hidden>
+    <span><kbd>Space</kbd> play</span>
+    <span><kbd>←</kbd><kbd>→</kbd> 1 frame</span>
+    <span><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> 10 frames</span>
+    <span><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> shuttle</span>
+    <span><kbd>I</kbd><kbd>O</kbd> in / out</span>
+    <span><kbd>P</kbd><kbd>S</kbd><kbd>C</kbd> picture / sound / cut</span>
+    <span><kbd>Enter</kbd> save note</span>
+    <span><kbd>Esc</kbd> clear</span>
+  </footer>
+  <script type="module" src="/ui/app.js"></script>
+  <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});</script>
+</body>
+</html>

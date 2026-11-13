@@ -1,0 +1,87 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "announce.mjs");
+const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+
+function setup(videos) {
+  const root = mkdtempSync(join(tmpdir(), "rv-"));
+  mkdirSync(join(root, "my-project"));
+  if (videos !== undefined) writeFileSync(join(root, "_review-index.json"), typeof videos === "string" ? videos : JSON.stringify({ videos }));
+  return root;
+}
+const video = (extra) => ({ id: "my-project/03-x", title: "03 X", project: "my-project", status: "sent",
+  round: 1, round_label: "First cut", notes_count: 4, claimed_at: null, ...extra });
+
+function run(root, cwd) {
+  const t = Date.now();
+  const r = spawnSync(process.execPath, [SCRIPT], { input: JSON.stringify({ cwd }),
+    env: { ...process.env, REVIEW_ROOT: root }, encoding: "utf8" });
+  return { ...r, ms: Date.now() - t };
+}
+
+test("announces unclaimed sent feedback", () => {
+  const root = setup([video()]);
+  const r = run(root, join(root, "my-project"));
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /Feedback ready: my-project \/ 03 X, First cut, 4 notes\./);
+  const cli = resolve(dirname(SCRIPT), "..", "review.py").replace(/\\/g, "/");
+  assert.ok(r.stdout.includes(`python "${cli}" claim my-project/03-x`), r.stdout);
+});
+
+test("silent outside the workspace", () => {
+  const root = setup([video()]);
+  const r = run(root, tmpdir());
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, "");
+});
+
+test("silent when claimed 1h ago, announces when claimed 5h ago", () => {
+  const fresh = setup([video({ claimed_at: hoursAgo(1) })]);
+  assert.equal(run(fresh, fresh).stdout, "");
+  const root = setup([video({ claimed_at: hoursAgo(5) })]);
+  assert.match(run(root, root).stdout, /Feedback ready/);
+});
+
+test("silent for other statuses", () => {
+  const root = setup([video({ status: "waiting" }), video({ status: "fixes_ready" }), video({ status: "approved" })]);
+  assert.equal(run(root, root).stdout, "");
+});
+
+test("silent and exit 0 when index missing or corrupt", () => {
+  const a = setup(undefined);
+  assert.deepEqual([run(a, a).status, run(a, a).stdout], [0, ""]);
+  const b = setup("{not json");
+  assert.deepEqual([run(b, b).status, run(b, b).stdout], [0, ""]);
+});
+
+test("fast", () => {
+  const root = setup([video()]);
+  assert.ok(run(root, root).ms < 500);
+});
+
+test("announces style reactions with style.py path", () => {
+  const root = setup([video({ kind: "style", id: "my-project/style-2", title: "Round two", round: 2,
+    round_label: "Style round 2", notes_count: 6 })]);
+  const r = run(root, root);
+  const cli = resolve(dirname(SCRIPT), "..", "style.py").replace(/\\/g, "/");
+  assert.match(r.stdout, /Style reactions ready: my-project \/ Round two, Style round 2, 6 candidates\./);
+  assert.ok(r.stdout.includes(`python "${cli}" claim my-project 2`), r.stdout);
+});
+
+test("announces a sent edit plan", () => {
+  const root = setup([video({ status: "plan_sent", round: 0, round_label: "Edit plan", notes_count: 2 })]);
+  const r = run(root, join(root, "my-project"));
+  assert.match(r.stdout, /Edit plan back: my-project \/ 03 X, 2 lines to change\./);
+  assert.ok(r.stdout.includes("claim my-project/03-x"), r.stdout);
+});
+
+test("an approved plan says build it", () => {
+  const root = setup([video({ status: "plan_sent", round: 0, round_label: "Edit plan", notes_count: 0 })]);
+  assert.match(run(root, join(root, "my-project")).stdout, /Edit plan back: my-project \/ 03 X, approved as is\./);
+});
